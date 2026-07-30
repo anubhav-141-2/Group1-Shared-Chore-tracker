@@ -40,8 +40,7 @@ export const chores = {
   list: (householdId) => request(`/households/${householdId}/chores`),
   create: (householdId, body) => request(`/households/${householdId}/chores`, { method: 'POST', body: JSON.stringify(body) }),
   complete: (householdId, choreId) => request(`/households/${householdId}/chores/${choreId}/complete`, { method: 'POST' }),
-  update: (householdId, choreId, body) => request(`/households/${householdId}/chores/${choreId}`, { method: 'PUT', body: JSON.stringify(body) }),
-  remove: (householdId, choreId) => request(`/households/${householdId}/chores/${choreId}`, { method: 'DELETE' }),
+  leaderboard: (householdId) => request(`/households/${householdId}/chores/leaderboard`),
 };
 
 export const settlements = {

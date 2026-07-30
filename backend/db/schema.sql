@@ -54,14 +54,11 @@ CREATE TABLE chores (
   id INT AUTO_INCREMENT PRIMARY KEY,
   household_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
-  frequency VARCHAR(50) NOT NULL DEFAULT 'weekly',
-  weight DECIMAL(10,2) NOT NULL DEFAULT 1.00,
-  current_assignee_id INT,
-  next_due_date DATE,
-  active TINYINT(1) DEFAULT 1,
+  points INT NOT NULL DEFAULT 100,
+  created_by_id INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE,
-  FOREIGN KEY (current_assignee_id) REFERENCES members(id) ON DELETE SET NULL
+  FOREIGN KEY (created_by_id) REFERENCES members(id) ON DELETE SET NULL
 );
 
 CREATE TABLE chore_completions (
@@ -71,6 +68,16 @@ CREATE TABLE chore_completions (
   completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (chore_id) REFERENCES chores(id) ON DELETE CASCADE,
   FOREIGN KEY (completed_by_id) REFERENCES members(id) ON DELETE CASCADE
+);
+
+CREATE TABLE household_bans (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  household_id INT NOT NULL,
+  user_id INT NOT NULL,
+  banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY (household_id, user_id),
+  FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE settlements (

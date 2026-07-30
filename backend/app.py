@@ -144,7 +144,7 @@ def auth_me():
             return json_error('User not found', 404)
 
         cur.execute(
-            '''SELECT m.id AS member_id, m.role, h.id AS household_id, h.name AS household_name
+            '''SELECT m.id AS member_id, m.role, h.id AS household_id, h.name AS household_name, h.invite_code
                FROM members m JOIN households h ON m.household_id = h.id
                WHERE m.user_id = %s''',
             (user_id,),
@@ -179,6 +179,27 @@ def create_household():
         household_id = cur.lastrowid
         cur.execute('INSERT INTO members (household_id, user_id, role) VALUES (%s, %s, %s)', (household_id, user_id, 'admin'))
         conn.commit()
+        admin_member_id = cur.lastrowid
+
+        default_chores = [
+            ('Clean the kitchen', 100),
+            ('Mop the floor', 200),
+            ('Do the laundry', 100),
+            ('Take out the trash', 50),
+            ('Clean the bathroom', 150),
+            ('Vacuum the living room', 100),
+            ('Wash the dishes', 100),
+            ('Water the plants', 50),
+            ('Clean the windows', 150),
+            ('Organize the pantry', 200),
+        ]
+        for chore_name, chore_points in default_chores:
+            cur.execute(
+                'INSERT INTO chores (household_id, name, points, created_by_id) VALUES (%s, %s, %s, %s)',
+                (household_id, chore_name, chore_points, admin_member_id),
+            )
+        conn.commit()
+
         return jsonify({'id': household_id, 'name': name, 'invite_code': invite_code, 'role': 'admin'}), 201
     except Exception as exc:
         conn.rollback()
@@ -217,6 +238,10 @@ def join_household():
         if cur.fetchone():
             return json_error('User already belongs to another household', 409)
 
+        cur.execute('SELECT id FROM household_bans WHERE household_id = %s AND user_id = %s', (household_id, user_id))
+        if cur.fetchone():
+            return json_error('You were removed from this household and cannot rejoin', 403)
+
         cur.execute('INSERT INTO members (household_id, user_id, role) VALUES (%s, %s, %s)', (household_id, user_id, 'member'))
         conn.commit()
 
@@ -249,6 +274,42 @@ def household_members(household_id: int):
         )
         return jsonify(serialize(cur.fetchall()))
     except Exception as exc:
+        return json_error(str(exc), 500)
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.route('/api/households/<int:household_id>/members/<int:member_id>', methods=['DELETE'])
+def remove_member(household_id: int, member_id: int):
+    try:
+        user_id = get_user_id_from_request()
+    except PermissionError as exc:
+        return json_error(str(exc), 401)
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute('SELECT role FROM members WHERE household_id = %s AND user_id = %s', (household_id, user_id))
+        admin = cur.fetchone()
+        if not admin or admin['role'] != 'admin':
+            return json_error('Only admin can remove members', 403)
+
+        cur.execute('SELECT user_id, role FROM members WHERE id = %s AND household_id = %s', (member_id, household_id))
+        target = cur.fetchone()
+        if not target:
+            return json_error('Member not found', 404)
+        if target['role'] == 'admin':
+            return json_error('Cannot remove the admin', 403)
+        if target['user_id'] == user_id:
+            return json_error('Cannot remove yourself', 403)
+
+        cur.execute('INSERT IGNORE INTO household_bans (household_id, user_id) VALUES (%s, %s)', (household_id, target['user_id']))
+        cur.execute('DELETE FROM members WHERE id = %s', (member_id,))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as exc:
+        conn.rollback()
         return json_error(str(exc), 500)
     finally:
         cur.close()
@@ -480,9 +541,12 @@ def list_chores(household_id: int):
     cur = conn.cursor(dictionary=True)
     try:
         cur.execute(
-            '''SELECT c.*, u.name AS assignee_name
-               FROM chores c LEFT JOIN members m ON c.current_assignee_id = m.id LEFT JOIN users u ON m.user_id = u.id
-               WHERE c.household_id = %s AND c.active = 1 ORDER BY c.next_due_date ASC''',
+            '''SELECT c.id, c.household_id, c.name, c.points, c.created_by_id, c.created_at,
+                      u.name AS created_by_name
+               FROM chores c
+               LEFT JOIN members m ON c.created_by_id = m.id
+               LEFT JOIN users u ON m.user_id = u.id
+               WHERE c.household_id = %s ORDER BY c.created_at''',
             (household_id,),
         )
         return jsonify(serialize(cur.fetchall()))
@@ -502,26 +566,25 @@ def create_chore(household_id: int):
 
     data = request.get_json(silent=True) or {}
     name = data.get('name')
-    frequency = data.get('frequency') or 'weekly'
-    weight = data.get('weight') or 1
-    initial_assignee_id = data.get('initial_assignee_id')
-    next_due_date = data.get('next_due_date')
+    points = data.get('points')
+
+    if not name or points is None:
+        return json_error('Name and points required', 400)
 
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
     try:
-        cur.execute('SELECT role FROM members WHERE household_id = %s AND user_id = %s', (household_id, user_id))
+        cur.execute('SELECT id FROM members WHERE household_id = %s AND user_id = %s', (household_id, user_id))
         member = cur.fetchone()
-        if not member or member['role'] != 'admin':
-            return json_error('Only admin can create chores', 403)
+        if not member:
+            return json_error('Not a member of this household', 403)
 
         cur.execute(
-            '''INSERT INTO chores (household_id, name, frequency, weight, current_assignee_id, next_due_date)
-               VALUES (%s, %s, %s, %s, %s, %s)''',
-            (household_id, name, frequency, weight, initial_assignee_id, next_due_date or None),
+            'INSERT INTO chores (household_id, name, points, created_by_id) VALUES (%s, %s, %s, %s)',
+            (household_id, name, points, member['id']),
         )
         conn.commit()
-        return jsonify({'id': cur.lastrowid}), 201
+        return jsonify({'id': cur.lastrowid, 'name': name, 'points': points}), 201
     except Exception as exc:
         conn.rollback()
         return json_error(str(exc), 500)
@@ -546,33 +609,15 @@ def complete_chore(household_id: int, chore_id: int):
             return json_error('Not a member', 403)
         member_id = member_row['id']
 
-        cur.execute('SELECT * FROM chores WHERE id = %s AND household_id = %s', (chore_id, household_id))
+        cur.execute('SELECT id, name, points FROM chores WHERE id = %s AND household_id = %s', (chore_id, household_id))
         chore = cur.fetchone()
         if not chore:
             return json_error('Chore not found', 404)
 
         cur.execute('INSERT INTO chore_completions (chore_id, completed_by_id) VALUES (%s, %s)', (chore_id, member_id))
-        cur.execute('SELECT id FROM members WHERE household_id = %s ORDER BY id', (household_id,))
-        members = cur.fetchall()
-        current_idx = next((idx for idx, member in enumerate(members) if member['id'] == chore['current_assignee_id']), 0)
-        next_idx = (current_idx + 1) % len(members)
-
-        next_due = date.today()
-        frequency = chore['frequency']
-        if frequency == 'daily':
-            next_due = next_due + timedelta(days=1)
-        elif frequency == 'weekly':
-            next_due = next_due + timedelta(days=7)
-        elif frequency == 'biweekly':
-            next_due = next_due + timedelta(days=14)
-        elif frequency == 'monthly':
-            next_due = next_due.replace(day=28) if next_due.month == 12 else next_due.replace(month=next_due.month + 1)
-        else:
-            next_due = next_due + timedelta(days=7)
-
-        cur.execute('UPDATE chores SET current_assignee_id = %s, next_due_date = %s WHERE id = %s', (members[next_idx]['id'], next_due, chore_id))
         conn.commit()
-        return jsonify({'success': True}), 201
+
+        return jsonify({'success': True, 'points': chore['points'], 'chore_name': chore['name']}), 201
     except Exception as exc:
         conn.rollback()
         return json_error(str(exc), 500)
@@ -581,72 +626,44 @@ def complete_chore(household_id: int, chore_id: int):
         conn.close()
 
 
-@app.route('/api/households/<int:household_id>/chores/<int:chore_id>', methods=['PUT'])
-def update_chore(household_id: int, chore_id: int):
+@app.route('/api/households/<int:household_id>/chores/leaderboard')
+def chore_leaderboard(household_id: int):
     try:
-        user_id = get_user_id_from_request()
-    except PermissionError as exc:
-        return json_error(str(exc), 401)
-
-    data = request.get_json(silent=True) or {}
-    updates = []
-    params = []
-    if 'name' in data:
-        updates.append('name = %s'); params.append(data['name'])
-    if 'frequency' in data:
-        updates.append('frequency = %s'); params.append(data['frequency'])
-    if 'weight' in data:
-        updates.append('weight = %s'); params.append(data['weight'])
-    if 'current_assignee_id' in data:
-        updates.append('current_assignee_id = %s'); params.append(data['current_assignee_id'])
-    if 'next_due_date' in data:
-        updates.append('next_due_date = %s'); params.append(data['next_due_date'])
-    if 'active' in data:
-        updates.append('active = %s'); params.append(data['active'])
-
-    if not updates:
-        return json_error('No fields to update', 400)
-
-    conn = get_connection()
-    cur = conn.cursor(dictionary=True)
-    try:
-        cur.execute('SELECT role FROM members WHERE household_id = %s AND user_id = %s', (household_id, user_id))
-        member = cur.fetchone()
-        if not member or member['role'] != 'admin':
-            return json_error('Only admin can edit chores', 403)
-
-        params.extend([chore_id, household_id])
-        cur.execute(f'UPDATE chores SET {", ".join(updates)} WHERE id = %s AND household_id = %s', params)
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as exc:
-        conn.rollback()
-        return json_error(str(exc), 500)
-    finally:
-        cur.close()
-        conn.close()
-
-
-@app.route('/api/households/<int:household_id>/chores/<int:chore_id>', methods=['DELETE'])
-def delete_chore(household_id: int, chore_id: int):
-    try:
-        user_id = get_user_id_from_request()
+        get_user_id_from_request()
     except PermissionError as exc:
         return json_error(str(exc), 401)
 
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
     try:
-        cur.execute('SELECT role FROM members WHERE household_id = %s AND user_id = %s', (household_id, user_id))
-        member = cur.fetchone()
-        if not member or member['role'] != 'admin':
-            return json_error('Only admin can archive chores', 403)
+        cur.execute(
+            '''SELECT m.id AS member_id, u.name,
+                     COALESCE(SUM(c.points), 0) AS points
+              FROM members m
+              JOIN users u ON m.user_id = u.id
+              LEFT JOIN chore_completions cc ON cc.completed_by_id = m.id
+              LEFT JOIN chores c ON cc.chore_id = c.id
+              WHERE m.household_id = %s
+              GROUP BY m.id, u.name''',
+            (household_id,),
+        )
+        rows = cur.fetchall()
+        total_points = sum(r['points'] for r in rows)
+        member_count = len(rows)
 
-        cur.execute('UPDATE chores SET active = 0 WHERE id = %s AND household_id = %s', (chore_id, household_id))
-        conn.commit()
-        return jsonify({'success': True})
+        leaderboard = []
+        for r in rows:
+            net = 2 * r['points'] - total_points if member_count > 0 else 0
+            leaderboard.append({
+                'member_id': r['member_id'],
+                'name': r['name'],
+                'points': r['points'],
+                'net': net,
+            })
+
+        leaderboard.sort(key=lambda x: x['net'], reverse=True)
+        return jsonify(leaderboard)
     except Exception as exc:
-        conn.rollback()
         return json_error(str(exc), 500)
     finally:
         cur.close()
@@ -740,9 +757,9 @@ def balance(household_id: int):
         owed_by_others = cur.fetchone()
         money_balance = round(float(paid['total']) - float(owed_by_others['total']), 2)
 
-        cur.execute('SELECT IFNULL(SUM(c.weight), 0) AS total FROM chore_completions cc JOIN chores c ON cc.chore_id = c.id WHERE c.household_id = %s AND cc.completed_by_id = %s', (household_id, my_member_id))
+        cur.execute('SELECT IFNULL(SUM(c.points), 0) AS total FROM chore_completions cc JOIN chores c ON cc.chore_id = c.id WHERE c.household_id = %s AND cc.completed_by_id = %s', (household_id, my_member_id))
         my_completions = cur.fetchone()
-        cur.execute('SELECT IFNULL(SUM(c.weight), 0) AS total FROM chore_completions cc JOIN chores c ON cc.chore_id = c.id WHERE c.household_id = %s', (household_id,))
+        cur.execute('SELECT IFNULL(SUM(c.points), 0) AS total FROM chore_completions cc JOIN chores c ON cc.chore_id = c.id WHERE c.household_id = %s', (household_id,))
         all_completions = cur.fetchone()
         member_count = len(members)
         my_fair_share = float(all_completions['total']) / member_count if member_count else 0
