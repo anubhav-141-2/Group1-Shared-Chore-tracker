@@ -9,20 +9,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (!token) { setLoading(false); return; }
     auth.me()
       .then(data => {
         setUser(data.user);
         setHousehold(data.household);
       })
-      .catch(() => localStorage.removeItem('token'))
+      .catch(() => sessionStorage.removeItem('token'))
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email, password) => {
     const data = await auth.login({ email, password });
-    localStorage.setItem('token', data.token);
+    sessionStorage.setItem('token', data.token);
     setUser(data.user);
     const me = await auth.me();
     setHousehold(me.household);
@@ -31,13 +31,13 @@ export function AuthProvider({ children }) {
 
   const register = async (name, email, password) => {
     const data = await auth.register({ name, email, password });
-    localStorage.setItem('token', data.token);
+    sessionStorage.setItem('token', data.token);
     setUser(data.user);
     return data;
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setUser(null);
     setHousehold(null);
   };

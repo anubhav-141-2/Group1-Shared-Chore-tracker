@@ -34,22 +34,32 @@ export default function HouseholdSettings() {
 
   const isAdmin = members.some(m => m.user_id === user?.id && m.role === 'admin');
 
+  const handleRemove = async (memberId, name) => {
+    if (!confirm(`Remove ${name} from the household?`)) return;
+    try {
+      await households.removeMember(household.household_id, memberId);
+      setMembers(prev => prev.filter(m => m.id !== memberId));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h3 className="font-semibold text-sm mb-2">Invite Code</h3>
-        <div className="flex gap-2 items-center">
-          <code className="bg-gray-100 px-3 py-1 rounded text-lg font-bold">{inviteCode}</code>
-          <button onClick={copyCode} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-          {isAdmin && (
+      {isAdmin && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="font-semibold text-sm mb-2">Invite Code</h3>
+          <div className="flex gap-2 items-center">
+            <code className="bg-gray-100 px-3 py-1 rounded text-lg font-bold">{inviteCode}</code>
+            <button onClick={copyCode} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
             <button onClick={handleRegenerate} className="text-xs text-red-600 hover:underline ml-2">
               Regenerate
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <h3 className="font-semibold text-sm mb-2">Members</h3>
@@ -59,9 +69,16 @@ export default function HouseholdSettings() {
               <p className="text-sm font-medium">{m.name}</p>
               <p className="text-xs text-gray-500">{m.email}</p>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded ${m.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-              {m.role}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-0.5 rounded ${m.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                {m.role}
+              </span>
+              {isAdmin && m.role !== 'admin' && m.user_id !== user?.id && (
+                <button onClick={() => handleRemove(m.id, m.name)} className="text-xs text-red-600 hover:underline">
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

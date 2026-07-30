@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Home() {
+  const { user, household } = useAuth();
   return (
     <div className="space-y-10">
       <section className="mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
@@ -18,24 +20,40 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              to="/login"
-              className="rounded-full bg-slate-900 px-6 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/household/create"
-              className="rounded-full border border-slate-200 bg-white px-6 py-3 text-center text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
-            >
-              Create household
-            </Link>
-            <Link
-              to="/household/join"
-              className="rounded-full border border-blue-200 bg-blue-50 px-6 py-3 text-center text-sm font-semibold text-blue-700 transition hover:-translate-y-0.5 hover:bg-blue-100"
-            >
-              Join with code
-            </Link>
+            {user ? (
+              <>
+                {household ? (
+                  <Link
+                    to="/dashboard"
+                    className="rounded-full bg-slate-900 px-6 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
+                  >
+                    Go to Dashboard
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      to="/household/create"
+                      className="rounded-full bg-slate-900 px-6 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
+                    >
+                      Create household
+                    </Link>
+                    <Link
+                      to="/household/join"
+                      className="rounded-full border border-slate-200 bg-white px-6 py-3 text-center text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
+                    >
+                      Join with code
+                    </Link>
+                  </>
+                )}
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="rounded-full bg-slate-900 px-6 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
+              >
+                Log in
+              </Link>
+            )}
           </div>
         </div>
 

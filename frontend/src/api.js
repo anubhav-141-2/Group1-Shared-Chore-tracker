@@ -1,7 +1,7 @@
 const BASE = '/api';
 
 function getToken() {
-  return localStorage.getItem('token');
+  return sessionStorage.getItem('token');
 }
 
 async function request(path, options = {}) {
@@ -25,6 +25,7 @@ export const households = {
   create: (body) => request('/households', { method: 'POST', body: JSON.stringify(body) }),
   join: (body) => request('/households/join', { method: 'POST', body: JSON.stringify(body) }),
   members: (id) => request(`/households/${id}/members`),
+  removeMember: (householdId, memberId) => request(`/households/${householdId}/members/${memberId}`, { method: 'DELETE' }),
   regenerateInvite: (id) => request(`/households/${id}/invite`, { method: 'PUT' }),
 };
 

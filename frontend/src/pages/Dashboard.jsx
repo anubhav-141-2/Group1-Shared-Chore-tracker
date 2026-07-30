@@ -3,7 +3,7 @@ import { balance } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
-  const { household } = useAuth();
+  const { household, user } = useAuth();
   const [data, setData] = useState(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -20,6 +20,8 @@ export default function Dashboard() {
 
   return (
     <div>
+      <h2 className="text-2xl font-bold text-slate-900 mb-6">Welcome back, {user?.name}</h2>
+
       <div className="bg-white rounded-lg border border-gray-200 p-6 text-center mb-6">
         <p className="text-sm text-gray-500 mb-1">Your Fairness Balance</p>
         <p className={`text-3xl font-bold ${combined === 0 ? 'text-green-600' : owes ? 'text-red-600' : 'text-green-600'}`}>
