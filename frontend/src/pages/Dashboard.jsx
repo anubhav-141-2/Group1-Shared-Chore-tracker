@@ -16,7 +16,21 @@ export default function Dashboard() {
   if (!data) return <p className="text-gray-500 text-sm">Loading balance...</p>;
 
   const combined = data.combined_balance;
-  const owes = combined < 0;
+  const points = data.chore_credit;
+
+  const moneyLine = combined === 0
+    ? "You're square!"
+    : combined < 0
+      ? `You owe $${Math.abs(combined).toFixed(2)}`
+      : `You're ahead $${combined.toFixed(2)}`;
+  const moneyColor = combined < 0 ? 'text-red-600' : 'text-green-600';
+
+  const choreLine = points === 0
+    ? null
+    : points < 0
+      ? `You owe ${Math.abs(points).toFixed(1)} chore points`
+      : `You're ${points.toFixed(1)} chore points ahead`;
+  const choreColor = points < 0 ? 'text-red-600' : 'text-green-600';
 
   return (
     <div>
@@ -24,9 +38,14 @@ export default function Dashboard() {
 
       <div className="bg-white rounded-lg border border-gray-200 p-6 text-center mb-6">
         <p className="text-sm text-gray-500 mb-1">Your Fairness Balance</p>
-        <p className={`text-3xl font-bold ${combined === 0 ? 'text-green-600' : owes ? 'text-red-600' : 'text-green-600'}`}>
-          {combined === 0 ? 'You\'re square!' : owes ? `You owe $${Math.abs(combined).toFixed(2)}` : `You're ahead $${combined.toFixed(2)}`}
+        <p className={`text-3xl font-bold ${moneyColor}`}>
+          {moneyLine}
         </p>
+        {choreLine && (
+          <p className={`text-xl font-semibold mt-1 ${choreColor}`}>
+            {choreLine}
+          </p>
+        )}
         <button onClick={() => setShowBreakdown(!showBreakdown)} className="text-xs text-blue-600 hover:underline mt-2">
           {showBreakdown ? 'Hide' : 'Show'} breakdown
         </button>

@@ -85,6 +85,20 @@ export default function Settlements() {
         </div>
       )}
 
+      {balanceData && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+          <h3 className="font-semibold text-sm mb-2">Your Chore Credit</h3>
+          <p className="text-sm text-gray-600">
+            Completed {balanceData.total_chore_weight_completed.toFixed(1)} points · fair share {balanceData.fair_share_chore_weight.toFixed(1)} points
+          </p>
+          <p className={`text-sm font-medium mt-1 ${balanceData.chore_credit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {balanceData.chore_credit >= 0
+              ? `You're ${balanceData.chore_credit.toFixed(1)} chore points ahead`
+              : `You owe ${Math.abs(balanceData.chore_credit).toFixed(1)} chore points`}
+          </p>
+        </div>
+      )}
+
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
       {showForm && (
