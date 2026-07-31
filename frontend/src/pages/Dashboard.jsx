@@ -45,7 +45,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h3 className="font-semibold text-sm mb-2">Chore Credit</h3>
             <p className="text-sm text-gray-700">
-              Completed {data.total_chore_weight_completed.toFixed(1)} weight points (fair share: {data.fair_share_chore_weight.toFixed(1)})
+              Completed {data.total_chore_weight_completed.toFixed(1)} points (fair share: {data.fair_share_chore_weight.toFixed(1)})
             </p>
             <p className="text-sm text-gray-700">
               {data.chore_credit >= 0
@@ -66,8 +66,8 @@ export default function Dashboard() {
             {data.breakdown.map(m => (
               <div key={m.member_id} className="flex justify-between text-sm py-1">
                 <span>{m.name}</span>
-                <span className={m.net_balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {m.net_balance >= 0 ? `owes you $${m.net_balance.toFixed(2)}` : `you owe $${Math.abs(m.net_balance).toFixed(2)}`}
+                <span className="text-gray-600 text-xs">
+                  paid ${m.total_paid.toFixed(2)} · received ${m.total_received.toFixed(2)} · {m.chore_count} chore{m.chore_count === 1 ? '' : 's'} done
                 </span>
               </div>
             ))}

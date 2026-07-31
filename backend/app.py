@@ -179,7 +179,6 @@ def create_household():
         household_id = cur.lastrowid
         cur.execute('INSERT INTO members (household_id, user_id, role) VALUES (%s, %s, %s)', (household_id, user_id, 'admin'))
         conn.commit()
-        admin_member_id = cur.lastrowid
 
         default_chores = [
             ('Clean the kitchen', 100),
@@ -195,8 +194,8 @@ def create_household():
         ]
         for chore_name, chore_points in default_chores:
             cur.execute(
-                'INSERT INTO chores (household_id, name, points, created_by_id) VALUES (%s, %s, %s, %s)',
-                (household_id, chore_name, chore_points, admin_member_id),
+                'INSERT INTO chores (household_id, name, points) VALUES (%s, %s, %s)',
+                (household_id, chore_name, chore_points),
             )
         conn.commit()
 
@@ -541,11 +540,8 @@ def list_chores(household_id: int):
     cur = conn.cursor(dictionary=True)
     try:
         cur.execute(
-            '''SELECT c.id, c.household_id, c.name, c.points, c.created_by_id, c.created_at,
-                      u.name AS created_by_name
+            '''SELECT c.id, c.household_id, c.name, c.points, c.created_at
                FROM chores c
-               LEFT JOIN members m ON c.created_by_id = m.id
-               LEFT JOIN users u ON m.user_id = u.id
                WHERE c.household_id = %s ORDER BY c.created_at''',
             (household_id,),
         )
@@ -580,8 +576,8 @@ def create_chore(household_id: int):
             return json_error('Not a member of this household', 403)
 
         cur.execute(
-            'INSERT INTO chores (household_id, name, points, created_by_id) VALUES (%s, %s, %s, %s)',
-            (household_id, name, points, member['id']),
+            'INSERT INTO chores (household_id, name, points) VALUES (%s, %s, %s)',
+            (household_id, name, points),
         )
         conn.commit()
         return jsonify({'id': cur.lastrowid, 'name': name, 'points': points}), 201
@@ -777,15 +773,12 @@ def balance(household_id: int):
             if member['id'] == my_member_id:
                 continue
             cur.execute('SELECT IFNULL(SUM(es.share_amount), 0) AS total FROM expenses e JOIN expense_shares es ON e.id = es.expense_id WHERE e.household_id = %s AND e.payer_id = %s AND es.member_id = %s AND e.archived = 0', (household_id, my_member_id, member['id']))
-            i_paid = cur.fetchone()
+            total_paid = float(cur.fetchone()['total'])
             cur.execute('SELECT IFNULL(SUM(es.share_amount), 0) AS total FROM expenses e JOIN expense_shares es ON e.id = es.expense_id WHERE e.household_id = %s AND e.payer_id = %s AND es.member_id = %s AND e.archived = 0', (household_id, member['id'], my_member_id))
-            they_paid = cur.fetchone()
-            cur.execute('SELECT IFNULL(SUM(amount), 0) AS total FROM settlements WHERE household_id = %s AND from_member_id = %s AND to_member_id = %s', (household_id, my_member_id, member['id']))
-            from_me = cur.fetchone()
-            cur.execute('SELECT IFNULL(SUM(amount), 0) AS total FROM settlements WHERE household_id = %s AND from_member_id = %s AND to_member_id = %s', (household_id, member['id'], my_member_id))
-            to_me = cur.fetchone()
-            net = round(float(i_paid['total']) - float(they_paid['total']) + float(from_me['total']) - float(to_me['total']), 2)
-            breakdown.append({'member_id': member['id'], 'user_id': member['user_id'], 'name': member['name'], 'net_balance': net})
+            total_received = float(cur.fetchone()['total'])
+            cur.execute('SELECT COUNT(*) AS cnt FROM chore_completions cc JOIN chores c ON cc.chore_id = c.id WHERE c.household_id = %s AND cc.completed_by_id = %s', (household_id, member['id']))
+            chore_count = cur.fetchone()['cnt']
+            breakdown.append({'member_id': member['id'], 'user_id': member['user_id'], 'name': member['name'], 'total_paid': total_paid, 'total_received': total_received, 'chore_count': chore_count})
 
         return jsonify({
             'money_balance': money_balance,
