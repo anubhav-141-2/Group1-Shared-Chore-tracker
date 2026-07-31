@@ -84,9 +84,6 @@ CREATE TABLE household_bans (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Migration for existing databases: add points column to chores
-ALTER TABLE chores ADD COLUMN points INT NOT NULL DEFAULT 100 AFTER name;
-
 CREATE TABLE settlements (
   id INT AUTO_INCREMENT PRIMARY KEY,
   household_id INT NOT NULL,
